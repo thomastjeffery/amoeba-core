@@ -16,6 +16,7 @@
 # along with Amoeba.  If not, see <http://www.gnu.org/licenses/>.
 
 import unittest
+from functools import reduce
 
 class Piece():
     """The "piece" part of a piece buffer
@@ -30,6 +31,7 @@ class Piece():
         self.text = text
         self.start = start
         self.end = end
+        self.active = True
 
     def apply(self, piece, filler=' '):
         """Applies a piece onto this piece, returning the resulting piece.
@@ -38,6 +40,7 @@ class Piece():
         Does not modify either piece.
         If a piece is applied outside of this piece's text, the resulting gap will be filled by the `filler` character.
         When the `text` attribute is not set, `self.apply` assumes a deletion, or sets `piece.text` to an empty string.
+        If `piece.apply` is False, piece will be skipped, and an unmodified copy of `self` will be returned.
 
         Usage:
         To insert text at a position, set both `start` and `end` to the index you want to insert at.
@@ -66,6 +69,10 @@ class Piece():
         Piece(text="Hello, world!").apply(
             Piece(start=5, end=11)
         )"""
+
+        # Skip if `piece.active` is False
+        if not piece.active:
+            return self
 
         result = Piece(start=self.start, end=self.end)
 
@@ -127,21 +134,21 @@ class Buffer():
 
     def __init__(self, piece=Piece(text="")):
         self.pieces = [piece]
+        self.undone = []
 
     def print(self):
         """Returns a string representing the current state of this buffer.
 
         """
 
-        result = self.pieces[0]
+#        result = self.pieces[0]
 
-        for piece in self.pieces[1:]:
-            result = result.apply(piece)
+#        for piece in self.pieces[1:]:
+#            result = result.apply(piece)
 
-        return result.text
+#        return result
 
-    def push(self, piece):
-        self.pieces.append(piece)
+        return reduce(lambda piece, x: piece.apply(x), self.pieces).text
 
     def insert(self, text, index):
         """Insert `text` at `index`.
@@ -160,6 +167,12 @@ class Buffer():
 
         """
         self.pieces.append(Piece(start=to_index, end=from_index))
+
+    def undo(self, piece_index):
+        self.pieces[piece_index].active = False
+
+    def redo(self, piece_index):
+        self.pieces[piece_index].active = True
 
 
 class PieceTest(unittest.TestCase):
@@ -322,6 +335,22 @@ class BufferTest(unittest.TestCase):
         self.buffer.delete(4, 6)
 
         self.assertEqual(self.buffer.print(), "Hell world.")
+
+    def test_undo(self):
+        self.buffer.insert("Hello, world!", 0)
+        self.buffer.replace("Goodbye", 0, 5)
+        self.buffer.undo(len(self.buffer.pieces) - 1)
+
+        self.assertEqual(self.buffer.print(), "Hello, world!")
+
+    def test_redo(self):
+        self.buffer.insert("Hello, world!", 0)
+        self.buffer.replace("Goodbye", 0, 5)
+        self.buffer.undo(len(self.buffer.pieces) - 1)
+        self.buffer.redo(len(self.buffer.pieces) - 1)
+
+        self.assertEqual(self.buffer.print(), "Goodbye, world!")
+
 
 if __name__ == "__main__":
     # Do unit tests
